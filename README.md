@@ -47,20 +47,4 @@ calcfref := (psi = one; phi = one);  (*Initial guess of the solution*)
 spNDSolve[z, linearMap[{0, 1}], 20, {mu, 2}]
 ```
 
-# Construction of grid
-
-cheb[x, # &, 8]
-
-cheb[x, (# + 1)/2 &, 8]
-
-cheb[x, linearMap[{0, 1}], 8]
-
-cheb[x, {10, "periodic"}]
-
-cheb[x1, linearMap[{0, 0.2}], 6, "1"]
-
-cheb[x2, linearMap[{0.2, 1}], 8, "2"]
-
-cheb[{x, y}, {10, 10}]
-
-cheb[{z, x}, {linearMap[{0, 1}], # &}, {20, {20, "periodic"}}]
+The folder PDW includes a nontrivial example of this package.
