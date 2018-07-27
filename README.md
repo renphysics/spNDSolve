@@ -47,4 +47,4 @@ calcfref := (psi = one; phi = one);  (*Initial guess of the solution*)
 spNDSolve[z, linearMap[{0, 1}], 20, {mu, 2}]
 ```
 
-The folder PDW includes a nontrivial example of this package.
+The folder PDW contains a nontrivial example as the background solution in 1612.04385 and 1705.05390.
