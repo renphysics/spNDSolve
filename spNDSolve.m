@@ -1,9 +1,19 @@
 (* ::Package:: *)
 
-(*spNDSolve v0.1, by Jie Ren, 2018/7/28*)
+(*
+spNDSolve v0.1, by Jie Ren, 2018/7/28
+A Mathematica package for solving PDEs by the pseudospectral method
+*)
 
 
-$HistoryLength=3;
+bryIndex::usage = "bryIndex[m,n]";
+bryLinearize::usage = "bryLinearize[{flist,reflist},{{bryind1,brylist1},{bryind2,brylist2}}]";
+changeVariable::usage = "changeVariable[expr_, hlist_, varlist_, trans_, invtrans_, simp_:Identity], hlist is function heads, varlist is old variables, trans is old variables expressed in terms of new variables";
+cheb::usage = "See the detailed documentation";
+domainCompose::usage = "lhs1\[CirclePlus]lhs2, and impose interface boundary conditions";
+eqLinearize::usage = "eqLinearize[{flist,reflist},{eqlist,\"eqlist\",\"mat\"}] or eqLinearize[{flist,reflist},{eqlist,\"eqlist\",\"mat\",True,\"eqlistmat\"}]";
+spNDSolve::usage="spNDSolve[{x_, y_}, {fx_, fy_}, {nxGrid0_, nyGrid0_}, {par___}, s_String:\"\", OptionsPattern[]]";
+spNIntegrate::usage = "spNIntegrate[x, fx, nxGrid0, expr, \"s\", rules]. It calls cheb[x, fx, nxGrid0, s, rules] and produces global variables \"lhs\" and \"rhs\" with surfix \"s\". e.g., spNIntegrate[x, linearMap[{1, 2}], 20, Sin[x], \"s\"]\[LeftDoubleBracket]-1\[RightDoubleBracket] does the work of NIntegrate[Sin[x], {x, 1, 2}]";
 
 
 CircleTimes=KroneckerProduct;
@@ -20,36 +30,11 @@ DotEqual[a_HoldForm,b_]:=(a/.hold[lft_]:>hold[lft=b])//ReleaseHold;  (*not a_hol
 DotEqual[a_List,b_List]:=MapThread[DotEqual,{a,b}];
 
 
-SubStar=Replace[Flatten[#],(y_/;Head[y]=!=Equal):>(y==0),1]&;
-
-
-SuperStar=Replace[Flatten[#1],y_/;Head[y]===Equal:>y[[1]]-y[[2]],1]&;
-
-
 Vee[x__]:=ToExpression[StringJoin[Sequence@@toString[{x}]]];
 Attributes[Vee]={HoldAll,Listable};
 
 
-SubStar::usage="e.g., {\!\(\*SubscriptBox[\(eq\), \(1\)]\)==0, \!\(\*SubscriptBox[\(eq\), \(2\)]\), \!\(\*SubscriptBox[\(eq\), \(3\)]\)\!\(\*SubscriptBox[\(}\), \(*\)]\). Add \"==0\" to a list of equstions if necessary";
-arrayDrop::usage="arrayDrop[\!\(\*
-StyleBox[\"mat\",\nFontSlant->\"Italic\"]\), \!\(\*
-StyleBox[\"ind\",\nFontSlant->\"Italic\"]\)], \!\(\*
-StyleBox[\"ind\",\nFontSlant->\"Italic\"]\) will be flattened. Drop the rows and columns specified by \!\(\*
-StyleBox[\"ind\",\nFontSlant->\"Italic\"]\), e.g., {1, 2, 5}";
-changeVariable::usage = "changeVariable[expr_, hlist_, varlist_, trans_, invtrans_, simp_:Identity], hlist is function heads, varlist is old variables, trans is old variables expressed in terms of new variables";
-cheb::usage = "See the detailed documentation";
-domainCompose::usage = "lhs1\[CirclePlus]lhs2, and impose interface boundary conditions";
-spNDSolve::usage="spNDSolve[{x_, y_}, {fx_, fy_}, {nxGrid0_, nyGrid0_}, {par___}, s_String:\"\", OptionsPattern[]]";
-schrodinger::usage="{the Schrodinger potential, dh/dr, new = \"output\" old}";
-spNIntegrate::usage = "spNIntegrate[x, fx, nxGrid0, expr, \"s\", rules]. It calls cheb[x, fx, nxGrid0, s, rules] and produces global variables \"lhs\" and \"rhs\" with surfix \"s\". e.g., spNIntegrate[x, linearMap[{1, 2}], 20, Sin[x], \"s\"]\[LeftDoubleBracket]-1\[RightDoubleBracket] does the work of NIntegrate[Sin[x], {x, 1, 2}]";
-
-
 addTo[a_List,b_List]:=MapThread[AddTo,{a,b}];  (*a=Unevaluated/@lista*)
-
-
-appendVariable[h_,{x__},{t__}]:=Module[{zero=Sequence@@Table[0,Length[{t}]]},
-{h[x]:>h[x,t],Derivative[n__][h][x]:>Derivative[n,zero][h][x,t]}];
-appendVariable[hlist_List,{x__},{t__}]:=appendVariable[#,{x},{t}]&/@hlist//Flatten;
 
 
 arcTanh[x_]:=ArcTanh[round[x]];  (*arcTanh[-1.]=-\[Infinity], arcTanh[0.]=0*)
@@ -146,7 +131,7 @@ If[OptionValue["D"]=!=False,{"d"\[Diamond]x,"d"\[Diamond]x\[Diamond]x}\[DotEqual
 id\[Diamond]s\[DotEqual]IdentityMatrix[nxGrid\[Vee]s+1];
 zero\[Diamond]s\[DotEqual]0id\[Vee]s;
 one\[Diamond]s\[DotEqual]Table[1,{dimGrid\[Vee]s}];];
-cheb[x_,nxGrid0_,s_String:"",opt:OptionsPattern[]]:=cheb[x,#&,nxGrid0,s,opt];
+cheb[x_,nxGrid0_,s_String:"",opt:OptionsPattern[]]:=cheb[x,#&,nxGrid0,s,opt]; (*downvalue must be after cheb[{x_, y_}, {nxGrid0_, nyGrid0_}, ...]*)
 
 cheb[{x_,y_},{fx_Function,fy_Function},{nxGrid0_,nyGrid0_},s_String:"",OptionsPattern[]]:=Block[{xtemp,ytemp,fdx,fdy,fdxCheb,fdxCheb2,fdyCheb,fdyCheb2,idx,idy,ind1,ind2,ind1rep,ind2rep},
 dimPDE=2;
@@ -233,13 +218,16 @@ If[$useNDSolve===True,
 dxCheb=NDSolve`FiniteDifferenceDerivative[1,xCheb,DifferenceOrder->"Pseudospectral"]["DifferentiationMatrix"]//Normal;,
 dxCheb=N[Table[If[i!=j,(-1)^(i+j)/(xCheb[[i]]-xCheb[[j]]) If[i==1||i==nxGrid+1,2,1]/If[j==1||j==nxGrid+1,2,1],0],{i,nxGrid+1},{j,nxGrid+1}],prec];
 dxCheb=dxCheb-DiagonalMatrix[Plus@@@dxCheb];];,  (*Negative sum trick*)
+
 nxGrid=nxGrid0[[1]];  (*x finite difference, nxGrid0={grid size, order, grid type}*)
 Which[nxGrid0[[-1]]==="cheb",  (*Cheb grid*)
 xCheb=-N[Table[Cos[(j \[Pi])/nxGrid],{j,0,nxGrid}],prec];
 dxCheb=NDSolve`FiniteDifferenceDerivative[1,xCheb,DifferenceOrder->nxGrid0[[2]]]["DifferentiationMatrix"]//Normal;,
+
 nxGrid0[[-1]]==="uniform"||Head[nxGrid0[[-1]]]===Integer,  (*uniform grid, default*)
 xCheb=-N[Table[(nxGrid-2j)/nxGrid,{j,0,nxGrid}],prec];
 dxCheb=NDSolve`FiniteDifferenceDerivative[1,xCheb,DifferenceOrder->nxGrid0[[2]]]["DifferentiationMatrix"]//Normal;,
+
 nxGrid0[[-1]]==="periodic",  (*periodic*)
 nxGrid+=1;
 xCheb=N[Table[(2\[Pi] j)/nxGrid,{j,0,nxGrid}],prec];
@@ -255,14 +243,7 @@ clear[x_]:=(Clear[x];x);
 SetAttributes[clear,HoldAll];
 
 
-clearAll:=ClearAll[Evaluate[$Context<>"*"]];
-clearAll::usage="clearAll clears all values, definitions, attributes, messages and defaults associated with symbols in the current context";
-
-
 collect[eq_,vars_List,trans_:Simplify]:=Collect[eq/Coefficient[eq,vars[[1]]],vars,trans];
-
-
-comm[L1_,L2_]:=L1**L2-L2**L1;
 
 
 cond[mat_?MatrixQ]:=Divide@@Table[SingularValueList[mat,k,Tolerance->0][[1]],{k,{1,-1}}];  (*2-norm ondition number*)
@@ -383,9 +364,6 @@ diag[vec_?VectorQ]:=DiagonalMatrix[vec];
 diag[mat_?MatrixQ]:=Module[{i},Table[mat[[i,i]],{i,Length[mat]}]];
 
 
-DiracMatrix[n_,dim_Integer:4,rep_String:"Chiral"]:=Internal`DiracGammaMatrix[n,"Metric"->Flatten@{1,Table[-1,{i,dim-1}]},"Basis"->rep];
-
-
 domainCompose[s1_String,s2_String]:=Block[{nEq=nEq\[Vee]s1,dimGrid1=dimGrid\[Vee]s1,ind1,ind2,mat11,mat12,mat21,mat22},
 {ind1,mat11,mat21}=itfrepl\[Vee]s1//release;
 {ind2,mat12,mat22}=itfrepl\[Vee]s2//release;
@@ -395,9 +373,6 @@ lhs[[ind1]]={{ArrayFlatten[mat11][[ind1]],-ArrayFlatten[mat12][[ind2]]}}//ArrayF
 lhs[[ind2+nEq dimGrid1]]={{ArrayFlatten[mat21][[ind1]],-ArrayFlatten[mat22][[ind2]]}}//ArrayFlatten;
 rhs[[ind1]]=0;
 rhs[[ind2+nEq dimGrid1]]=0;];
-
-
-downValues=TableForm@DownValues[#]&;
 
 
 dRule[f_[x_]->expr_]:={f[x]->expr,f'[x]->D[expr,x],f''[x]->D[expr,x,x]};
@@ -516,29 +491,19 @@ linearMap[x_,{x1_,x2_}->{y1_,y2_}]:=linearMap[{x1,x2}->{y1,y2}][x];
 linearMap[x_,{y1_,y2_}]:=linearMap[{y1,y2}][x];
 
 
+listFormat[m_List,n__]:=Map[Table[1,Evaluate[Sequence@@Partition[Dimensions[m[[n]]],1]]]#&,m,{Length[{n}]}];
+
+
+listPart[x_List,spec__]:=x[[spec]];
+
+
 map[heads_List,vars_]:=Map[#[Sequence@@vars]&,heads];
 
 
 memory:={memoryForm[MemoryInUse[]]<>" in use",memoryForm[MemoryAvailable[]]<>" available"};
 
 
-memoryForm[mem_,n_:3]:=Which[10^3<=mem<10^6,ToString@NumberForm[N[10^-3 mem],n]<>" K",10^6<=mem<10^9,ToString@NumberForm[N[10^-6 mem],n]<>" M",10^9<=mem<10^12,ToString@NumberForm[N[10^-9 mem],n]<>" G",True,ToString[mem]];
-
-
-nbclose:=(NotebookSave[];NotebookClose[];)
-
-
-NDSolvePE=NDSolve`ProcessEquations;
-NDSolveR=NDSolve`Reinitialize;
-NDSolveI=NDSolve`Iterate;
-NDSolvePS=NDSolve`ProcessSolutions;
-NDSolveFDD=NDSolve`FiniteDifferenceDerivative;
-
-
-nD[x_List,y_List]:=Differences[y]/Differences[x];
-
-
-neumannBC[ind0_,f_,f0_:0,mat_]:=Module[{ind=Flatten[{ind0}]},LinearSolve[mat[[ind,ind]],f0-drop[mat[[ind]],{},ind].drop[f,ind]]];  (*used in the method of lines*)
+memoryForm[mem_,n_:3]:=Which[10^3<=mem<10^6,ToString@NumberForm[N[10^-3 mem],n]<>"\[ThinSpace]K",10^6<=mem<10^9,ToString@NumberForm[N[10^-6 mem],n]<>"\[ThinSpace]M",10^9<=mem<10^12,ToString@NumberForm[N[10^-9 mem],n]<>"\[ThinSpace]G",True,ToString[mem]];
 
 
 noInfinity[expr_]:=Quiet[expr]/.{Indeterminate->0,ComplexInfinity->0};
@@ -547,9 +512,6 @@ SetAttributes[noInfinity,HoldAll];
 
 noSimplify[expr_,lev_:1]:=Block[{Simplify,FullSimplify},Simplify=Identity;If[lev==2,FullSimplify=Identity;];expr];
 SetAttributes[noSimplify,HoldFirst];
-
-
-nPower[x_List,y_List]:=(x[[1;;-2]]+x[[2;;-1]])/(y[[1;;-2]]+y[[2;;-1]]) nD[x,y];  (*It calls another function nD*)
 
 
 optimize[expr_]:=Experimental`OptimizeExpression[expr];
@@ -704,9 +666,6 @@ SetAttributes[round,Listable];
 ruleToSet:=(HoldForm[##]/.Rule->Set)&;
 
 
-schrodinger[P_,Q_,F_,r_]:={1/F^2 (Q+1/4 P^2-1/2 D[P,r]-3/4 D[F,r]^2/F^2+1/2 D[F,r,r]/F),(P F-D[F,r])/(2F),Exp[-Integrate[(P F-D[F,r])/(2F),r]]};  (*-y''[r]+P[r]y'[r]+Q[r]y[r]\[Equal]\[Omega]^2F[r]^2y[r], dh/dr=(P[r]F[r]-F'[r])/(2F[r])*)
-
-
 set[a_List,b_List]:=MapThread[Set,{a,b}];  (*a=Unevaluated/@lista*)
 set[a_HoldForm,b_HoldForm]:=Table[Identity@@MapThread[Set,{{a[[i]]},{b[[i]]}}],{i,Length[a]}];  (*a=hold@@Unevaluated/@lista, b=hold@@listb*)
 
@@ -715,13 +674,12 @@ setdir:=SetDirectory[NotebookDirectory[]];
 
 
 simplify=FullSimplify;
-zSimplify[expr_]:=Module[{r},Simplify[Simplify[expr/.z->Sqrt[1-r^2],r>0]/.r->Sqrt[1-z^2],z>0]];
 
 
 solution=(#/.(y_->f_):>Inactive[Set][y\[Diamond]"sol",y\[Diamond]"sol"\[DotEqual]f])&;
 
 
-Options[spNDSolve]={calcrefredQ->False,epValue->10^-10,eqlistmatQ->False,iniQ->True,linearQ->False,lsqrQ->False,minPrec->0,"D"->False};
+Options[spNDSolve]={calcrefredQ->False,epValue->10^-9,eqlistmatQ->False,iniQ->True,linearQ->False,lsqrQ->False,minPrec->0,"D"->False};
 spNDSolve[x_,fx_,nxGrid0_,s_String:"",opt:OptionsPattern[]]:=Block[{interpQ=False,ep=OptionValue[epValue],change=1,df,nprint=1},
 If[{fx,nxGrid0}!=lastGrid\[Vee]s,interpQ=True;];  (*If the grid is changed, do interpolation from last result*)
 If[interpQ===True,finterpf\[Vee]s//release;];  (*get interpolating function*)
@@ -749,9 +707,10 @@ If[nprint==1,changes={change};nprint++;,AppendTo[changes,change];];
 If[change>ep^-1,Print["change>",ep^-1];Abort[];];
 
 addTo[hlist\[Vee]s,Partition[df,dimGrid\[Vee]s]];];
-output\[Vee]s];
-spNDSolve[x_,fx_,nxGrid0_,plists__List,s_String:"",opt:OptionsPattern[]]:=Block[{n=0},
-continue[spNDSolve[x,fx,nxGrid0,s,iniQ->If[n!=0,False,n++;OptionValue[iniQ]],opt],plists]];
+output];
+spNDSolve[x_,fx_,nxGrid0_,plists__List,s_String:"",opt:OptionsPattern[]]:=Block[{n=1,out},
+continue[out=spNDSolve[x,fx,nxGrid0,s,iniQ->If[n==1,OptionValue[iniQ],False],opt];If[n==1,outputs={out};n++;,AppendTo[outputs,out];],plists];
+Print["Saved to ",Style["outputs",Bold]]];
 SetAttributes[spNDSolve,HoldFirst];
 
 
@@ -763,15 +722,6 @@ lhs\[Diamond]s[[1]]\[DotEqual]id\[Vee]s[[1]];
 rhs\[Diamond]s[[1]]\[DotEqual]0;
 LinearSolve[lhs\[Vee]s,rhs\[Vee]s]);
 SetAttributes[spNIntegrate,HoldAll];
-
-
-sqrtSubs={Sqrt[x_] Sqrt[y_]:>Sqrt[x y],1/(Sqrt[x_] Sqrt[y_]):>1/Sqrt[x y]};
-
-
-style=Style[#,14]&;
-
-
-timing=AbsoluteTiming;
 
 
 toHeldExpression=ToExpression[#,StandardForm,HoldForm]&;
